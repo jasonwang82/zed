@@ -1,5 +1,6 @@
 mod acp;
 mod claude;
+mod codebuddy;
 mod codex;
 mod custom;
 mod gemini;
@@ -9,6 +10,7 @@ pub mod e2e_tests;
 
 pub use claude::*;
 use client::ProxySettings;
+pub use codebuddy::*;
 pub use codex::*;
 use collections::HashMap;
 pub use custom::*;

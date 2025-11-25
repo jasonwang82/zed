@@ -468,6 +468,23 @@ impl AgentServerStore {
                     .and_then(|settings| settings.custom_command()),
             }),
         );
+        self.external_agents.insert(
+            CODEBUDDY_NAME.into(),
+            Box::new(LocalCodeBuddy {
+                fs: fs.clone(),
+                node_runtime: node_runtime.clone(),
+                project_environment: project_environment.clone(),
+                custom_command: new_settings
+                    .codebuddy
+                    .clone()
+                    .and_then(|settings| settings.custom_command()),
+                ignore_system_version: new_settings
+                    .codebuddy
+                    .as_ref()
+                    .and_then(|settings| settings.ignore_system_version)
+                    .unwrap_or(false),
+            }),
+        );
         self.external_agents
             .extend(
                 new_settings
@@ -567,7 +584,7 @@ impl AgentServerStore {
         // Set up the builtin agents here so they're immediately available in
         // remote projects--we know that the HeadlessProject on the other end
         // will have them.
-        let external_agents: [(ExternalAgentServerName, Box<dyn ExternalAgentServer>); 3] = [
+        let external_agents: Vec<(ExternalAgentServerName, Box<dyn ExternalAgentServer>)> = vec![
             (
                 CLAUDE_CODE_NAME.into(),
                 Box::new(RemoteExternalAgentServer {
@@ -594,6 +611,16 @@ impl AgentServerStore {
                     project_id,
                     upstream_client: upstream_client.clone(),
                     name: GEMINI_NAME.into(),
+                    status_tx: None,
+                    new_version_available_tx: None,
+                }) as Box<dyn ExternalAgentServer>,
+            ),
+            (
+                CODEBUDDY_NAME.into(),
+                Box::new(RemoteExternalAgentServer {
+                    project_id,
+                    upstream_client: upstream_client.clone(),
+                    name: CODEBUDDY_NAME.into(),
                     status_tx: None,
                     new_version_available_tx: None,
                 }) as Box<dyn ExternalAgentServer>,
@@ -1477,6 +1504,85 @@ impl ExternalAgentServer for LocalCodex {
     }
 }
 
+struct LocalCodeBuddy {
+    fs: Arc<dyn Fs>,
+    node_runtime: NodeRuntime,
+    project_environment: Entity<ProjectEnvironment>,
+    custom_command: Option<AgentServerCommand>,
+    ignore_system_version: bool,
+}
+
+impl ExternalAgentServer for LocalCodeBuddy {
+    fn get_command(
+        &mut self,
+        root_dir: Option<&str>,
+        extra_env: HashMap<String, String>,
+        status_tx: Option<watch::Sender<SharedString>>,
+        new_version_available_tx: Option<watch::Sender<Option<String>>>,
+        cx: &mut AsyncApp,
+    ) -> Task<Result<(AgentServerCommand, String, Option<task::SpawnInTerminal>)>> {
+        let fs = self.fs.clone();
+        let node_runtime = self.node_runtime.clone();
+        let project_environment = self.project_environment.downgrade();
+        let custom_command = self.custom_command.clone();
+        let ignore_system_version = self.ignore_system_version;
+        let root_dir: Arc<Path> = root_dir
+            .map(|root_dir| Path::new(root_dir))
+            .unwrap_or(paths::home_dir())
+            .into();
+
+        cx.spawn(async move |cx| {
+            let mut env = project_environment
+                .update(cx, |project_environment, cx| {
+                    project_environment.local_directory_environment(
+                        &Shell::System,
+                        root_dir.clone(),
+                        cx,
+                    )
+                })?
+                .await
+                .unwrap_or_default();
+
+            let mut command = if let Some(mut custom_command) = custom_command {
+                env.extend(custom_command.env.unwrap_or_default());
+                custom_command.env = Some(env);
+                custom_command
+            } else if !ignore_system_version
+                && let Some(bin) =
+                    find_bin_in_path("codebuddy".into(), root_dir.to_path_buf(), env.clone(), cx).await
+            {
+                AgentServerCommand {
+                    path: bin,
+                    args: vec!["--acp".to_string()],
+                    env: Some(env),
+                }
+            } else {
+                let mut command = get_or_npm_install_builtin_agent(
+                    CODEBUDDY_NAME.into(),
+                    "@anthropic-ai/codebuddy-code".into(),
+                    "node_modules/@anthropic-ai/codebuddy-code/dist/index.js".into(),
+                    None,
+                    status_tx,
+                    new_version_available_tx,
+                    fs,
+                    node_runtime,
+                    cx,
+                )
+                .await?;
+                command.env = Some(env);
+                command
+            };
+
+            command.env.get_or_insert_default().extend(extra_env);
+            Ok((command, root_dir.to_string_lossy().into_owned(), None))
+        })
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 pub const CODEX_ACP_REPO: &str = "zed-industries/codex-acp";
 
 fn get_platform_info() -> Option<(&'static str, &'static str, &'static str)> {
@@ -1768,12 +1874,14 @@ impl ExternalAgentServer for LocalCustomAgent {
 pub const GEMINI_NAME: &'static str = "gemini";
 pub const CLAUDE_CODE_NAME: &'static str = "claude";
 pub const CODEX_NAME: &'static str = "codex";
+pub const CODEBUDDY_NAME: &'static str = "codebuddy";
 
 #[derive(Default, Clone, JsonSchema, Debug, PartialEq, RegisterSetting)]
 pub struct AllAgentServersSettings {
     pub gemini: Option<BuiltinAgentServerSettings>,
     pub claude: Option<BuiltinAgentServerSettings>,
     pub codex: Option<BuiltinAgentServerSettings>,
+    pub codebuddy: Option<BuiltinAgentServerSettings>,
     pub custom: HashMap<SharedString, CustomAgentServerSettings>,
 }
 #[derive(Default, Clone, JsonSchema, Debug, PartialEq)]
@@ -1916,6 +2024,7 @@ impl settings::Settings for AllAgentServersSettings {
             gemini: agent_settings.gemini.map(Into::into),
             claude: agent_settings.claude.map(Into::into),
             codex: agent_settings.codex.map(Into::into),
+            codebuddy: agent_settings.codebuddy.map(Into::into),
             custom: agent_settings
                 .custom
                 .into_iter()

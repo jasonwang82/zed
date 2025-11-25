@@ -151,6 +151,7 @@ pub enum ExternalAgent {
     Gemini,
     ClaudeCode,
     Codex,
+    CodeBuddy,
     NativeAgent,
     Custom { name: SharedString },
 }
@@ -161,6 +162,7 @@ impl ExternalAgent {
             "gemini-cli" => Some(Self::Gemini),
             "claude-code" => Some(Self::ClaudeCode),
             "codex" => Some(Self::Codex),
+            "codebuddy" => Some(Self::CodeBuddy),
             "zed" => Some(Self::NativeAgent),
             _ => None,
         }
@@ -175,6 +177,7 @@ impl ExternalAgent {
             Self::Gemini => Rc::new(agent_servers::Gemini),
             Self::ClaudeCode => Rc::new(agent_servers::ClaudeCode),
             Self::Codex => Rc::new(agent_servers::Codex),
+            Self::CodeBuddy => Rc::new(agent_servers::CodeBuddy),
             Self::NativeAgent => Rc::new(agent::NativeAgentServer::new(fs, history)),
             Self::Custom { name } => Rc::new(agent_servers::CustomAgentServer::new(name.clone())),
         }
