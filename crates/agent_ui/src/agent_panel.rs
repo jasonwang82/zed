@@ -255,7 +255,7 @@ impl AgentType {
             Self::Gemini => "Gemini CLI".into(),
             Self::ClaudeCode => "Claude Code".into(),
             Self::Codex => "Codex".into(),
-            Self::CodeBuddy => "CodeBuddy".into(),
+            Self::CodeBuddy => "CodeBuddy Code".into(),
             Self::Custom { name, .. } => name.into(),
         }
     }
@@ -2081,7 +2081,7 @@ impl AgentPanel {
                                     }),
                             )
                             .item(
-                                ContextMenuEntry::new("CodeBuddy")
+                                ContextMenuEntry::new("CodeBuddy Code")
                                     .when(is_agent_selected(AgentType::CodeBuddy), |this| {
                                         this.action(Box::new(NewExternalAgentThread { agent: None }))
                                     })

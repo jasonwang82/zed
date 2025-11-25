@@ -1109,7 +1109,7 @@ impl AgentConfiguration {
                             .child(Divider::horizontal().color(DividerColor::BorderFaded))
                             .child(self.render_agent_server(
                                 AgentIcon::Name(IconName::Terminal),
-                                "CodeBuddy",
+                                "CodeBuddy Code",
                                 false,
                                 cx,
                             ))

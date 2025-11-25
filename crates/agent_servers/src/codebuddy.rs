@@ -21,7 +21,7 @@ impl AgentServer for CodeBuddy {
     }
 
     fn name(&self) -> SharedString {
-        "CodeBuddy".into()
+        "CodeBuddy Code".into()
     }
 
     fn logo(&self) -> ui::IconName {

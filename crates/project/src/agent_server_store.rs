@@ -471,11 +471,18 @@ impl AgentServerStore {
         self.external_agents.insert(
             CODEBUDDY_NAME.into(),
             Box::new(LocalCodeBuddy {
+                fs: fs.clone(),
+                node_runtime: node_runtime.clone(),
                 project_environment: project_environment.clone(),
                 custom_command: new_settings
                     .codebuddy
                     .clone()
                     .and_then(|settings| settings.custom_command()),
+                ignore_system_version: new_settings
+                    .codebuddy
+                    .as_ref()
+                    .and_then(|settings| settings.ignore_system_version)
+                    .unwrap_or(false),
             }),
         );
         self.external_agents
@@ -1498,8 +1505,11 @@ impl ExternalAgentServer for LocalCodex {
 }
 
 struct LocalCodeBuddy {
+    fs: Arc<dyn Fs>,
+    node_runtime: NodeRuntime,
     project_environment: Entity<ProjectEnvironment>,
     custom_command: Option<AgentServerCommand>,
+    ignore_system_version: bool,
 }
 
 impl ExternalAgentServer for LocalCodeBuddy {
@@ -1507,12 +1517,15 @@ impl ExternalAgentServer for LocalCodeBuddy {
         &mut self,
         root_dir: Option<&str>,
         extra_env: HashMap<String, String>,
-        _status_tx: Option<watch::Sender<SharedString>>,
-        _new_version_available_tx: Option<watch::Sender<Option<String>>>,
+        status_tx: Option<watch::Sender<SharedString>>,
+        new_version_available_tx: Option<watch::Sender<Option<String>>>,
         cx: &mut AsyncApp,
     ) -> Task<Result<(AgentServerCommand, String, Option<task::SpawnInTerminal>)>> {
+        let fs = self.fs.clone();
+        let node_runtime = self.node_runtime.clone();
         let project_environment = self.project_environment.downgrade();
         let custom_command = self.custom_command.clone();
+        let ignore_system_version = self.ignore_system_version;
         let root_dir: Arc<Path> = root_dir
             .map(|root_dir| Path::new(root_dir))
             .unwrap_or(paths::home_dir())
@@ -1534,16 +1547,30 @@ impl ExternalAgentServer for LocalCodeBuddy {
                 env.extend(custom_command.env.unwrap_or_default());
                 custom_command.env = Some(env);
                 custom_command
-            } else {
-                let bin = find_bin_in_path("codebuddy".into(), root_dir.to_path_buf(), env.clone(), cx)
-                    .await
-                    .context("CodeBuddy binary 'codebuddy' not found in PATH. Please install CodeBuddy or configure a custom command in settings.")?;
-
+            } else if !ignore_system_version
+                && let Some(bin) =
+                    find_bin_in_path("codebuddy".into(), root_dir.to_path_buf(), env.clone(), cx).await
+            {
                 AgentServerCommand {
                     path: bin,
                     args: vec!["--acp".to_string()],
                     env: Some(env),
                 }
+            } else {
+                let mut command = get_or_npm_install_builtin_agent(
+                    CODEBUDDY_NAME.into(),
+                    "@anthropic-ai/codebuddy-code".into(),
+                    "node_modules/@anthropic-ai/codebuddy-code/dist/index.js".into(),
+                    None,
+                    status_tx,
+                    new_version_available_tx,
+                    fs,
+                    node_runtime,
+                    cx,
+                )
+                .await?;
+                command.env = Some(env);
+                command
             };
 
             command.env.get_or_insert_default().extend(extra_env);
