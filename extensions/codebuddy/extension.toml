@@ -1,0 +1,35 @@
+id = "codebuddy"
+name = "CodeBuddy"
+description = "CodeBuddy ACP agent server integration for Zed."
+version = "0.1.0"
+schema_version = 1
+authors = ["Zed Industries <hi@zed.dev>"]
+repository = "https://github.com/zed-industries/zed"
+
+[agent_servers.CodeBuddy]
+name = "CodeBuddy"
+
+[agent_servers.CodeBuddy.targets.darwin-aarch64]
+archive = "https://github.com/nicepkg/codebuddy/releases/download/v0.1.0/codebuddy-darwin-arm64.tar.gz"
+cmd = "./codebuddy"
+args = ["--acp"]
+
+[agent_servers.CodeBuddy.targets.darwin-x86_64]
+archive = "https://github.com/nicepkg/codebuddy/releases/download/v0.1.0/codebuddy-darwin-x64.tar.gz"
+cmd = "./codebuddy"
+args = ["--acp"]
+
+[agent_servers.CodeBuddy.targets.linux-aarch64]
+archive = "https://github.com/nicepkg/codebuddy/releases/download/v0.1.0/codebuddy-linux-arm64.tar.gz"
+cmd = "./codebuddy"
+args = ["--acp"]
+
+[agent_servers.CodeBuddy.targets.linux-x86_64]
+archive = "https://github.com/nicepkg/codebuddy/releases/download/v0.1.0/codebuddy-linux-x64.tar.gz"
+cmd = "./codebuddy"
+args = ["--acp"]
+
+[agent_servers.CodeBuddy.targets.windows-x86_64]
+archive = "https://github.com/nicepkg/codebuddy/releases/download/v0.1.0/codebuddy-windows-x64.zip"
+cmd = "./codebuddy.exe"
+args = ["--acp"]
