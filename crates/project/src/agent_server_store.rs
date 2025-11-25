@@ -577,7 +577,7 @@ impl AgentServerStore {
         // Set up the builtin agents here so they're immediately available in
         // remote projects--we know that the HeadlessProject on the other end
         // will have them.
-        let external_agents: [(ExternalAgentServerName, Box<dyn ExternalAgentServer>); 4] = [
+        let external_agents: Vec<(ExternalAgentServerName, Box<dyn ExternalAgentServer>)> = vec![
             (
                 CLAUDE_CODE_NAME.into(),
                 Box::new(RemoteExternalAgentServer {
