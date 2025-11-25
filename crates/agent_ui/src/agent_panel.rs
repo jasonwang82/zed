@@ -8,7 +8,7 @@ use agent::{ContextServerRegistry, DbThreadMetadata, HistoryEntry, HistoryStore}
 use db::kvp::{Dismissable, KEY_VALUE_STORE};
 use project::{
     ExternalAgentServerName,
-    agent_server_store::{CLAUDE_CODE_NAME, CODEX_NAME, GEMINI_NAME},
+    agent_server_store::{CLAUDE_CODE_NAME, CODEBUDDY_NAME, CODEX_NAME, GEMINI_NAME},
 };
 use serde::{Deserialize, Serialize};
 use settings::{
@@ -242,6 +242,7 @@ pub enum AgentType {
     Gemini,
     ClaudeCode,
     Codex,
+    CodeBuddy,
     Custom {
         name: SharedString,
     },
@@ -254,6 +255,7 @@ impl AgentType {
             Self::Gemini => "Gemini CLI".into(),
             Self::ClaudeCode => "Claude Code".into(),
             Self::Codex => "Codex".into(),
+            Self::CodeBuddy => "CodeBuddy".into(),
             Self::Custom { name, .. } => name.into(),
         }
     }
@@ -264,6 +266,7 @@ impl AgentType {
             Self::Gemini => Some(IconName::AiGemini),
             Self::ClaudeCode => Some(IconName::AiClaude),
             Self::Codex => Some(IconName::AiOpenAi),
+            Self::CodeBuddy => Some(IconName::Terminal),
             Self::Custom { .. } => Some(IconName::Terminal),
         }
     }
@@ -275,6 +278,7 @@ impl From<ExternalAgent> for AgentType {
             ExternalAgent::Gemini => Self::Gemini,
             ExternalAgent::ClaudeCode => Self::ClaudeCode,
             ExternalAgent::Codex => Self::Codex,
+            ExternalAgent::CodeBuddy => Self::CodeBuddy,
             ExternalAgent::Custom { name } => Self::Custom { name },
             ExternalAgent::NativeAgent => Self::NativeAgent,
         }
@@ -1457,6 +1461,11 @@ impl AgentPanel {
                 self.serialize(cx);
                 self.external_thread(Some(crate::ExternalAgent::Codex), None, None, window, cx)
             }
+            AgentType::CodeBuddy => {
+                self.selected_agent = AgentType::CodeBuddy;
+                self.serialize(cx);
+                self.external_thread(Some(crate::ExternalAgent::CodeBuddy), None, None, window, cx)
+            }
             AgentType::Custom { name } => self.external_thread(
                 Some(crate::ExternalAgent::Custom { name }),
                 None,
@@ -2071,6 +2080,35 @@ impl AgentPanel {
                                         }
                                     }),
                             )
+                            .item(
+                                ContextMenuEntry::new("CodeBuddy")
+                                    .when(is_agent_selected(AgentType::CodeBuddy), |this| {
+                                        this.action(Box::new(NewExternalAgentThread { agent: None }))
+                                    })
+                                    .icon(IconName::Terminal)
+                                    .icon_color(Color::Muted)
+                                    .disabled(is_via_collab)
+                                    .handler({
+                                        let workspace = workspace.clone();
+                                        move |window, cx| {
+                                            if let Some(workspace) = workspace.upgrade() {
+                                                workspace.update(cx, |workspace, cx| {
+                                                    if let Some(panel) =
+                                                        workspace.panel::<AgentPanel>(cx)
+                                                    {
+                                                        panel.update(cx, |panel, cx| {
+                                                            panel.new_agent_thread(
+                                                                AgentType::CodeBuddy,
+                                                                window,
+                                                                cx,
+                                                            );
+                                                        });
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    }),
+                            )
                             .map(|mut menu| {
                                 let agent_server_store = agent_server_store.read(cx);
                                 let agent_names = agent_server_store
@@ -2079,6 +2117,7 @@ impl AgentPanel {
                                         name.0 != GEMINI_NAME
                                             && name.0 != CLAUDE_CODE_NAME
                                             && name.0 != CODEX_NAME
+                                            && name.0 != CODEBUDDY_NAME
                                     })
                                     .cloned()
                                     .collect::<Vec<_>>();

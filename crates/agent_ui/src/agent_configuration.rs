@@ -28,7 +28,8 @@ use language_models::AllLanguageModelSettings;
 use notifications::status_toast::{StatusToast, ToastIcon};
 use project::{
     agent_server_store::{
-        AgentServerStore, CLAUDE_CODE_NAME, CODEX_NAME, ExternalAgentServerName, GEMINI_NAME,
+        AgentServerStore, CLAUDE_CODE_NAME, CODEBUDDY_NAME, CODEX_NAME, ExternalAgentServerName,
+        GEMINI_NAME,
     },
     context_server_store::{ContextServerConfiguration, ContextServerStatus, ContextServerStore},
 };
@@ -965,7 +966,10 @@ impl AgentConfiguration {
         let user_defined_agents = agent_server_store
             .external_agents()
             .filter(|name| {
-                name.0 != GEMINI_NAME && name.0 != CLAUDE_CODE_NAME && name.0 != CODEX_NAME
+                name.0 != GEMINI_NAME
+                    && name.0 != CLAUDE_CODE_NAME
+                    && name.0 != CODEX_NAME
+                    && name.0 != CODEBUDDY_NAME
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -1099,6 +1103,13 @@ impl AgentConfiguration {
                             .child(self.render_agent_server(
                                 AgentIcon::Name(IconName::AiGemini),
                                 "Gemini CLI",
+                                false,
+                                cx,
+                            ))
+                            .child(Divider::horizontal().color(DividerColor::BorderFaded))
+                            .child(self.render_agent_server(
+                                AgentIcon::Name(IconName::Terminal),
+                                "CodeBuddy",
                                 false,
                                 cx,
                             ))
